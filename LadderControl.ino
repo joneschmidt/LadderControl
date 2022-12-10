@@ -4,7 +4,8 @@
 //
 // *************************************************************************
 // Revision history:
-#define Version "LadderControl 0.1 2022/12/05"
+#define Version "LadderControl 0.2 2022/12/10"
+//   2022/12/10 J. Schmidt 0.5 First debugged version
 //   2022/11/17 J. Schmidt 0.1 Begin work
 // *************************************************************************
 // This code is free software: you can redistribute it and/or modify
@@ -24,7 +25,7 @@
 // Structure to define each turnout 
 typedef struct {
   // turnout id - text name of turnout
-  String TurnSId; 
+  String TurnName; 
   // turnout type - STALL or MOMNTRY
   uint8_t TurnType;
   // turnout control port 
@@ -36,46 +37,58 @@ typedef struct {
   // turnout path value
   int TurnWeight;
   // upstream turnout id - next higher turnout
-  String TurnUpSId;  
+  String TurnUpName;  
   // upstream turnout leg - which leg does this turnout connect to
   int TurnUpLeg; 
   // 2nd upstream turnout id - if an upward facing turnout,
   // which other turnout does it connect to?
-  String TurnUpSId2;  
+  String TurnUpName2;  
   // 2nd upstream turnout leg
   int TurnUpLeg2;
-} TurnDef;
+} TurnoutDef;
 //
-// Define track selection
+// Structure to define destination track selection
 typedef struct {
   // track select button port
   uint32_t ButtonPort;
-  // turnout id - button selects which leg of which turnouot
-  String TurnSId; 
+  // turnout - button selects turnout and leg
+  String TurnName; 
   // turnout leg
   int TurnLeg;
-} TrackDef;
+} DestnDef;
 //
+// structure for finding paths up the ladder
+typedef struct {
+  // index to turnout
+  int TurnUpIdx;  
+  // upstream turnout leg
+  int TurnUpLeg; 
+  } PathDef;
 // BEGIN Constants
+// Invert signal flags
+  // if true, HIGH means not pushed
+  #define INVERTBUTTONS true 
+  // if true, HIGH is off
+  #define INVERTRELAYS  true 
+// milliseconds between throws
+  #define THROWINTVMS    2000
 // Turnout motor type
   // stall motor
   #define STALL 1
-  #define STALLMS 3000 // duration of power on for STALL
+  #define STALLMS 3000 // millis of power on for STALL motors
   // momentary
   #define MOMNTRY 2
-  #define MOMNTRYMS 200 // duration of power on for MOMNTRY
+  #define MOMNTRYMS 200 // millis of power on for MOMNTRY motors
 // Turnout Leg Direction
   #define TNORM 1 // LOW signal
   #define TDVRG 2 // HIGH
 // time button live before action
-#define FLASHMS       100 // StatusLED flash rate
 #define DEBOUNCEINRMS   5 // checking debounce
 #define DEBOUNCEMS     20 // must be continactive debounce
-#define LADDERINTVMS  200 // time between turnout throws
-#define LADDERPWRMS   400 // power time for turnout
+#define FLASHMS       100 // StatusLED flash rate
 // ***************** TRACE *****************
 // DEBUG FLAGS
-#define TRACE 1
+#define TRACE 0
 #define TRACEDELAYSECS 5
   // false: run without executing - TRACE only
   #define EXECUTE false
@@ -84,7 +97,35 @@ typedef struct {
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 // USER DEFINITIONS
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-// Example 1
+/*
+// Example - 1-way ladder
+//               |  T1
+//            __/ \__
+//           /       \   
+//           0       1 Tracks
+//
+// USER: number of turnouts in ladder
+#define NUMTURNOUTS 1
+// USER: number of tracks 
+#define NUMTRACKS   2
+//
+// define the ladder
+TurnoutDef Turnouts [NUMTURNOUTS] = {
+// TurnName TurnType TurnPort  TurnPowrPort  TurnOccPort TurnWeight TurnUpName  TurnUpLeg  TurnUpName2 TurnUpLeg2
+    "T1",   STALL,    2,        4,            0,           0,         "",        0,        "",        0, // top of ladder
+  }; // Turnouts
+// define the destination tracks, buttons, next higher turnout and direction
+DestnDef Destins [NUMTRACKS] = {
+// ButtonPort  TurnName  TurnLeg
+// track 0
+      A0,     "T1",      TNORM,
+// track 1
+      A1,     "T1",      TDVRG
+  }; // Destins
+// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*/
+// vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+// Example - 6-way ladder
 //               |  T1
 //            __/ \__
 //           /       \   
@@ -98,23 +139,19 @@ typedef struct {
 #define NUMTURNOUTS 5
 // USER: number of tracks 
 #define NUMTRACKS   6
-// USER: seconds between throws
-#define THROWINTVMS    1000
-// USER: power on for momentary throws
-#define THROWPOWERMS   1500
 //
 // define the ladder
-TurnDef Turnouts [NUMTURNOUTS] = {
-// TurnSId TurnType TurnPort  TurnPowrPort  TurnOccPort TurnWeight TurnUpSId  TurnUpLeg  TurnUpSId2 TurnUpLeg2
-    "T1",   STALL,    3,        0,            0,           0,         "",        0,        "",        0, 
-    "T2",   STALL,    4,        0,            0,           0,       "T1",        TNORM,    "",        0, 
-    "T3",   STALL,    5,        0,            0,           0,       "T1",        TDVRG,    "",        0, 
-    "T4",   STALL,    6,        0,            0,           0,       "T2",        TNORM,    "",        0, 
-    "T5",   STALL,    7,        0,            0,           0,       "T3",        TNORM,    "",        0
+TurnoutDef Turnouts [NUMTURNOUTS] = {
+// TurnName TurnType TurnPort  TurnPowrPort  TurnOccPort TurnWeight TurnUpName  TurnUpLeg  TurnUpName2 TurnUpLeg2
+    "T1",   STALL,    6,        0,            0,           0,         "",        0,        "",        0, // top of ladder
+    "T2",   STALL,    5,        7,            0,           0,       "T1",        TNORM,    "",        0, 
+    "T3",   STALL,    4,        0,            0,           0,       "T1",        TDVRG,    "",        0, 
+    "T4",   STALL,    3,        7,            0,           0,       "T2",        TNORM,    "",        0, 
+    "T5",   STALL,    2,        0,            0,           0,       "T3",        TNORM,    "",        0
   }; // Turnouts
-// define the destination tracks & selector ports
-TrackDef Tracks [NUMTRACKS] = {
-// ButtonPort  TurnSId  TurnLeg
+// define the destination tracks, buttons, next higher turnout and direction
+DestnDef Destins [NUMTRACKS] = {
+// ButtonPort  TurnName  TurnLeg
 // track 0
       A0,     "T4",      TNORM,
 // track 1
@@ -127,25 +164,20 @@ TrackDef Tracks [NUMTRACKS] = {
       A4,     "T5",      TDVRG,
 // track 5
       A5,     "T3",      TDVRG
-  }; // Tracks
+  }; // Destins
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 // GLOBAL VARIABLES
 int ii,jj;
 int ButtonIdx, Button, LastButton;
-// data for finding paths up the ladder
-typedef struct {
-  // index to turnout
-  int TurnUpIdx;  
-  // upstream turnout leg
-  int TurnUpLeg; 
-  } PathDef;
-String TSid;
+String TString;
 #define PATHBEST 0
 #define PATHTEST 1
+// array for the path through the turnouts
 PathDef  Path[NUMTURNOUTS][2];
 long int PathWeight[2];
-int NumPaths, Pidx, BestIdx, Tidx, Tleg;
+int Pidx, BestIdx, Tidx, Tleg;
 // define a status LED if desired or -1
 int StatusLED = {13};
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -159,30 +191,38 @@ void InitPort(uint32_t PPort, int Pmode){
   int LPort;
 if (PPort < 100)
   {LPort = PPort;
+   if (Pmode == INPUT) {Pmode = (INVERTBUTTONS == false ? INPUT : INPUT_PULLUP);}
    pinMode(LPort, Pmode);}
   else ;// external init
 } // InitPort
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 int ReadSensor(uint32_t PPort){
-  int LPort;
+  int LPort, LValu;
 if (PPort < 100)
   {LPort = PPort;
-   return(digitalRead(PPort));}
+   LValu = digitalRead(PPort);
+   #if false // TRACE > 0
+     Serial.println ("ReadSensor " + String(LPort) + " raw value " + String(LValu));
+	 #endif
+   return(INVERTBUTTONS == false ? LValu : (LValu == LOW ? HIGH : LOW));}
   else ; // external read
 } // ReadSensor
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 void WritePort(uint32_t PPort, int Pval){
   int LPort;
+   #if TRACE > 0
+     Serial.println ("WritePort " + String(PPort) + " raw value " + String(Pval));
+	 #endif
 if (PPort < 100)
   {LPort = PPort;
-   digitalWrite(LPort, Pval);}
+   digitalWrite(LPort, (INVERTRELAYS == false ? Pval : (Pval == LOW ? HIGH : LOW)));}
   else ;// external write}
 } // WritePort
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-int GetTurnoutIdx(String PTSid){
+int GetTurnoutIdx(String PTString){
   int kk;
   for (kk = 0; kk < NUMTURNOUTS; ++kk){
-    if (PTSid == Turnouts[kk].TurnSId)
+    if (PTString == Turnouts[kk].TurnName)
     {return (kk);}
   } // for kk
   return (-1);  
@@ -198,15 +238,15 @@ void FindBestPath(){
     } // for jj
     } // for ii
 	// start tracing path from button/track
-	TSid = Tracks[Button].TurnSId;
-    Tleg = Tracks[Button].TurnLeg;
+	TString = Destins[Button].TurnName;
+    Tleg    = Destins[Button].TurnLeg;
 	Pidx = 0;
 	BestIdx = 0;
 	PathWeight[BestIdx] = 0;
     do {
-      Tidx = GetTurnoutIdx(TSid);
+      Tidx = GetTurnoutIdx(TString);
       #if TRACE > 0
-        Serial.print ("--Ties to turnout " + TSid + " index " + String(Tidx));
+        Serial.print ("--Ties to turnout " + TString + " index " + String(Tidx));
 		#endif
       if (Tleg == TNORM) 
         {Serial.println (" normal leg");}
@@ -221,9 +261,9 @@ void FindBestPath(){
       Path[Pidx][BestIdx].TurnUpIdx = Tidx;
       Path[Pidx][BestIdx].TurnUpLeg = Tleg;
 	  ++Pidx;
-      TSid = Turnouts[Tidx].TurnUpSId;
-      Tleg = Turnouts[Tidx].TurnUpLeg;
-    } while (TSid != ""); // do while jj
+      TString = Turnouts[Tidx].TurnUpName;
+      Tleg    = Turnouts[Tidx].TurnUpLeg;
+    } while (TString != ""); // do while jj
     #if TRACE > 0
   	  Serial.print ("-- Weight " + String(PathWeight[BestIdx]));
       Serial.println ();
@@ -237,22 +277,26 @@ void GetButton(){
   unsigned long BTime;
   Button = -1;
   do {
-      Bval = ReadSensor(Tracks[ButtonIdx].ButtonPort);
+      Bval = ReadSensor(Destins[ButtonIdx].ButtonPort);
       if (Bval == HIGH){
         BTime = millis();
         do {
           delay(DEBOUNCEINRMS);
-          Bval = ReadSensor(Tracks[ButtonIdx].ButtonPort);
+          Bval = ReadSensor(Destins[ButtonIdx].ButtonPort);
           } while (Bval == HIGH && (BTime + DEBOUNCEMS > millis())); // do while Bval
-        if (Bval == HIGH){
+        if (Bval == HIGH && ButtonIdx != LastButton){
           Button = ButtonIdx;
-		  #if TRACE > 0
-             Serial.print  ("Active Button " + String(Button));
-          #endif
+		      #if TRACE > 0
+             Serial.println ("Active Button " + String(Button));
+             #endif
+          LastButton = Button;
           return;} // Bval HIGH
         } // do Bval HIGH
 	++ButtonIdx;
 	ButtonIdx = ButtonIdx < NUMTRACKS ? ButtonIdx : 0;
+  #if false // TRACE > 0
+    delay (1000);
+  #endif
   } while (Button == -1);// do while button -1
 } // Getbutton
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
@@ -281,27 +325,28 @@ void ShowStatus(int Stat){
 void ThrowPath(){
   // walk the best path throwing the turnouts
   for (ii = 0; ii < Pidx; ++ii){
-	 ThrowTurnout(Path[Pidx][BestIdx].TurnUpIdx,Path[Pidx][BestIdx].TurnUpLeg);
+	 ThrowTurnout(Path[ii][BestIdx].TurnUpIdx, Path[ii][BestIdx].TurnUpLeg);
 	 delay(THROWINTVMS);
   } // for
 } // ThrowPath
 // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 void ThrowTurnout(int PPidx, int PPleg){
-  int NormDiv, PowrWait; // HIGH means diverge
+  int NormDiv, PowrWait, Activate, Clear; 
   // throw the turnout
   #if TRACE > 0
-    Serial.print("Throw turnout " + Turnouts[PPidx].TurnSId);
+    Serial.print("Throw turnout " + Turnouts[PPidx].TurnName + " index " + String(PPidx));
 	if (PPleg == TNORM) 
         {Serial.println (" normal leg");}
-        else Serial.println (" divergent leg");
+        else 
+		     Serial.println (" divergent leg");
 	#endif
   NormDiv = PPleg == TDVRG ? HIGH : LOW;
   // check if there is a power relay for stall turnout motors
   PowrWait = 0;
   if (Turnouts[PPidx].TurnType == STALL
 		&& Turnouts[PPidx].TurnPowrPort != 0) // turn on motor power
-   {WritePort(Turnouts[PPidx].TurnPowrPort, HIGH);
-   PowrWait = STALLMS;}
+	{WritePort(Turnouts[PPidx].TurnPowrPort, HIGH);
+     PowrWait = STALLMS;}
   // now set the motor throw
   WritePort(Turnouts[PPidx].TurnPort, NormDiv);
   // check for momentary turnout motors
@@ -318,21 +363,21 @@ void ThrowTurnout(int PPidx, int PPleg){
 void setup() {
   #if TRACE > 0
     Serial.begin(9600);
-    Serial.print  (Version);
-    Serial.print  ("******* Startup TRACE = ");
-    Serial.println(TRACE);
+    Serial.println (Version);
+    Serial.print   ("******* Startup TRACE = ");
+    Serial.println (TRACE);
     #endif // TRACE
   #if TRACE > 0
     Serial.println("Validate track structure");
     Serial.println("Walk the buttons");
     for (ii = 0; ii < NUMTRACKS; ++ii) {
     Serial.println ("Button/track " + String(ii));
-    TSid = Tracks[ii].TurnSId;
-    Tleg = Tracks[ii].TurnLeg;
+    TString = Destins[ii].TurnName;
+    Tleg = Destins[ii].TurnLeg;
 	PathWeight[PATHBEST] = 0;
     do {
-      Tidx = GetTurnoutIdx(TSid);
-      Serial.print ("--Ties to turnout " + TSid + " index " + String(Tidx)
+      Tidx = GetTurnoutIdx(TString);
+      Serial.print ("--Ties to turnout " + TString + " index " + String(Tidx)
 	    + " type " + (Turnouts[Tidx].TurnType == STALL ? "Stall" : "Momentary"));
 	  if (Turnouts[Tidx].TurnType == MOMNTRY
 	       && Turnouts[Tidx].TurnPowrPort == 0)
@@ -342,9 +387,9 @@ void setup() {
         else Serial.println (" divergent leg");
 	    PathWeight[PATHBEST] += 1 + Turnouts[Tidx].TurnWeight;
 		// ??JJJ error check for MOMNTRY without Powerport
-      TSid = Turnouts[Tidx].TurnUpSId;
+      TString = Turnouts[Tidx].TurnUpName;
       Tleg = Turnouts[Tidx].TurnUpLeg;
-    } while (TSid != ""); // do while jj
+    } while (TString != ""); // do while jj
 	Serial.print ("-- Weight " + String(PathWeight[PATHBEST]));
     Serial.println ();
     } // for ii
@@ -355,14 +400,15 @@ void setup() {
 		InitPort(StatusLED, OUTPUT);
 	    WritePort(StatusLED, LOW);}
     for (ii = 0; ii < NUMTRACKS; ++ii) {
-      InitPort(Tracks[ii].ButtonPort, INPUT);
+      InitPort(Destins[ii].ButtonPort, INPUT);
       } // for ii
     for (ii = 0; ii < NUMTURNOUTS; ++ii) {
       InitPort(Turnouts[ii].TurnPort, OUTPUT);
       if (Turnouts[ii].TurnPowrPort > 0) 
 		{InitPort (Turnouts[ii].TurnPowrPort, OUTPUT);
 		 WritePort(Turnouts[ii].TurnPowrPort, LOW);}
-      if (Turnouts[ii].TurnOccPort  > 0) {InitPort(Turnouts[ii].TurnOccPort,   INPUT);}
+      if (Turnouts[ii].TurnOccPort  > 0) 
+	    {InitPort(Turnouts[ii].TurnOccPort,   INPUT);}
       } // for ii 
   LastButton = -1;
   ButtonIdx  =  0;
@@ -372,19 +418,19 @@ void setup() {
 } // setup
 // #######################################################################################
 void loop() {
-  #if TRACE > 0 // TRACE
+  #if false // TRACE > 0 // TRACE
     Serial.println("Begin loop");
     #endif // TRACE
   // Scan the buttons
   GetButton();
-  if (Button >= 0 && Button != LastButton){
-	ShowStatus(1); // on - show work in process
+  if (Button >= 0){
+	  ShowStatus(1); // on - show work in process
     FindBestPath();
-	if (BestIdx >= 0)
+	  if (BestIdx >= 0)
 		ThrowPath();
   }// Button pushed
   	ShowStatus(0); // normal - off
-  #if TRACE > 0 // TRACE
+  #if false // TRACE > 0 // TRACE
     Serial.println("End loop");
 	delay(TRACEDELAYSECS * 1000);
     #endif // TRACE
