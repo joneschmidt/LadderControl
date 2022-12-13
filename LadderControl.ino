@@ -81,7 +81,7 @@ typedef struct {
   #define MOMNTRYMS 200 // millis of power on for MOMNTRY motors
 // Turnout Leg Direction
   #define TNORM 1 // LOW signal
-  #define TDVRG 2 // HIGH
+  #define TREV  2 // HIGH
 // time button live before action
 #define DEBOUNCEINRMS   5 // checking debounce
 #define DEBOUNCEMS     20 // must be continactive debounce
@@ -120,7 +120,7 @@ DestnDef Destins [NUMTRACKS] = {
 // track 0
       A0,     "T1",      TNORM,
 // track 1
-      A1,     "T1",      TDVRG
+      A1,     "T1",      TREV
   }; // Destins
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 */
@@ -145,7 +145,7 @@ TurnoutDef Turnouts [NUMTURNOUTS] = {
 // TurnName TurnType TurnPort  TurnPowrPort  TurnOccPort TurnWeight TurnUpName  TurnUpLeg  TurnUpName2 TurnUpLeg2
     "T1",   STALL,    6,        0,            0,           0,         "",        0,        "",        0, // top of ladder
     "T2",   STALL,    5,        7,            0,           0,       "T1",        TNORM,    "",        0, 
-    "T3",   STALL,    4,        0,            0,           0,       "T1",        TDVRG,    "",        0, 
+    "T3",   STALL,    4,        0,            0,           0,       "T1",        TREV,     "",        0, 
     "T4",   STALL,    3,        7,            0,           0,       "T2",        TNORM,    "",        0, 
     "T5",   STALL,    2,        0,            0,           0,       "T3",        TNORM,    "",        0
   }; // Turnouts
@@ -155,15 +155,15 @@ DestnDef Destins [NUMTRACKS] = {
 // track 0
       A0,     "T4",      TNORM,
 // track 1
-      A1,     "T4",      TDVRG,
+      A1,     "T4",      TREV,
 // track 2
-      A2,     "T2",      TDVRG,
+      A2,     "T2",      TREV,
 // track 3
       A3,     "T5",      TNORM,
 // track 4
-      A4,     "T5",      TDVRG,
+      A4,     "T5",      TREV,
 // track 5
-      A5,     "T3",      TDVRG
+      A5,     "T3",      TREV
   }; // Destins
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //
@@ -340,7 +340,7 @@ void ThrowTurnout(int PPidx, int PPleg){
         else 
 		     Serial.println (" divergent leg");
 	#endif
-  NormDiv = PPleg == TDVRG ? HIGH : LOW;
+  NormDiv = PPleg == TREV ? HIGH : LOW;
   // check if there is a power relay for stall turnout motors
   PowrWait = 0;
   if (Turnouts[PPidx].TurnType == STALL
