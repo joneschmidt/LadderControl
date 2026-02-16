@@ -4,7 +4,8 @@
 //
 // *************************************************************************
 // Revision history:
-#define Version "LadrCntl 0.9 26/01/26 a"
+#define Version "LadrCntl 1.1 26/02/16"
+//   2026/02/16 J. Schmidt 1.1 throw turnout relay before applying power
 //   2025/11/22 J. Schmidt 0.6 Begin work extended addressing
 //   2022/12/10 J. Schmidt 0.5 First debugged version
 //   2022/11/17 J. Schmidt 0.1 Begin work
@@ -533,8 +534,11 @@ void ThrowPaths(){
 	Serial.println(" ");
 	#endif
   NormDiv = lleg == TREV ? HIGH : LOW;
+  // now set the motor throw
+  delay(THROWINTVMS);
+  WriteSensor(lport, NormDiv);
   // check if there is a power relay for stall turnout motors
-  PowrWait = 0;
+  PowrWait = 0; // minimum between throws
   lpwrhndl = Turnouts[thand].TurnPowrHandle;
   if (lpwrhndl != NONE) {// turn on motor power
     #if TRACE > 0
@@ -547,8 +551,6 @@ void ThrowPaths(){
   if (Turnouts[thand].TurnType == MOMNTRY)
      {PowrWait = MOMNTRYMS;}
   } // checking power
-  // now set the motor throw
-  WriteSensor(lport, NormDiv);
    if (PowrWait != 0)
       {  
        #if TRACE > 0
